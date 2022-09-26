@@ -1,0 +1,114 @@
+= A Camel Quarkus example with REST API client, Kafka and AWS S3
+
+This is a Camel Quarkus project that defines the following two Camel routes:
+
+Route 1:
+
+* Get a joke from api.chucknorris.io every three seconds
+* Extract the joke text from the JSON message
+* Forward the Joke to a Kafka topic
+* Print the joke to the console
+
+Route 2:
+
+* Receive jokes from the Kafka topic
+* Forward them to an AWS S3 bucket
+
+== Prerequisites
+
+* Java 11+
+* Maven 3.8.6+
+* An S3 bucket
+* Working `docker` environment
+
+=== Create an S3 bucket
+
+* Install the https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html[AWS CLI]
+* Have S3 credentials ready
++
+[source,shell]
+----
+# For our app
+export AWS_ACCESS_KEY=<your-access-key-id>
+export AWS_SECRET_KEY=<your-secret-access-key>
+export AWS_REGION=...
+
+# for aws CLI
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_KEY}"
+export AWS_DEFAULT_REGION="${AWS_REGION}"
+----
++
+* Create the bucket
++
+[source,shell]
+----
+export AWS_S3_BUCKET_NAME=camel-demo
+# Make sure the bucket is empty if it exists already
+aws s3 rm s3://${AWS_S3_BUCKET_NAME} --recursive
+# or create the bucket
+aws s3api create-bucket --bucket ${AWS_S3_BUCKET_NAME} --create-bucket-configuration LocationConstraint=${AWS_REGION}
+
+# Delete the bucket after the demo
+#aws s3api delete-bucket --bucket ${AWS_S3_BUCKET_NAME}
+----
+
+== Play with the dev mode
+
+----
+$ mvn clean compile quarkus:dev
+----
+
+* After the dev mode has started, you should see `Do not laugh at Chuck Norris!` messages coming in the console every three seconds.
+* Add the snippets commented commented in link:src/main/java/org/acme/Routes.java?L46 one by one.
+* Save the file and see the instant reload of the application in the console where you started dev mode.
+*
+
+== Package and run the application
+
+Once you are done with developing you may want to package and run the application.
+In addition to AWS S3 credentials, you also need to export the URL of a running Kafka broker.
+
+You may want to use the Red Panda container for testing purposes:
+
+----
+$ docker run -d --name=redpanda-1 --rm \
+        -p 9092:9092 \
+        -p 9644:9644 \
+        docker.vectorized.io/vectorized/redpanda:v22.1.2 \
+        redpanda start \
+        --overprovisioned \
+            --smp 1  \
+            --memory 1G \
+            --reserve-memory 0M \
+            --node-id 0 \
+            --check=false
+# Create the topic
+$ docker exec -it redpanda-1 rpk topic create cnorris --brokers=localhost:9092
+# export the broker URL for our application
+$ export KAFKA_BOOSTRAP_URL=127.0.0.1:9092
+----
+
+=== JVM mode
+
+----
+# Build the application
+$ mvn package -DskipTests
+# Run in JVM mode
+$ java -jar target/quarkus-app/quarkus-run.jar
+----
+
+=== Native mode
+
+To prepare a native executable using GraalVM, run the following command:
+
+----
+# Build the application in native mode
+$ mvn package -DskipTests -Pnative -Dquarkus.native.container-build=true
+# Run the native executable (on Linux)
+$ ./target/*-runner
+----
+
+== Camel K demo
+
+See its separate link:camel-k/README.adoc[README].
